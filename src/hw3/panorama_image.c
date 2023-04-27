@@ -236,9 +236,13 @@ int model_inliers(matrix H, match *m, int n, float thresh)
     for (int i = 0; i < n; i++)
     {
         if (point_distance(project_point(H, m[i].p), m[i].q) < thresh)
+        {    
+            match temp = m[count];
+            m[count] = m[i];
+            m[i] = temp; 
             count++;
+        }
     }
-    qsort(m, n, sizeof(match), match_compare);
 
     return count;
 }
@@ -336,15 +340,29 @@ matrix RANSAC(match *m, int n, float thresh, int k, int cutoff)
     //         if it's better than the cutoff:
     //             return it immediately
     // if we get to the end return the best homography
+    int best_8 = 0;
     for (int i = 0; i < k; i++)
     {
         randomize_matches(m, n);
+       
         matrix H = compute_homography(m, 8);
+        if (H.cols == 0 && H.rows == 0)
+                continue;
         int inliers = model_inliers(H, m, n, thresh);
         if (inliers > best)
         {
-            Hb = compute_homography(m, inliers);
-            if (inliers > cutoff)
+            matrix new_H = compute_homography(m, inliers);
+            if (new_H.cols == new_H.rows && new_H.rows == 0)
+                continue;
+            // best = model_inliers(Hb, m, n, thresh);
+            best_8 = inliers;
+            int new_inliers = model_inliers(new_H, m, n, thresh);
+            printf("%d %d\n", inliers, new_inliers);
+            if (new_inliers > inliers)
+                Hb = new_H;
+            else Hb = H;
+            best = new_inliers; 
+            if (best > cutoff)
             {
                 return Hb;
             }
