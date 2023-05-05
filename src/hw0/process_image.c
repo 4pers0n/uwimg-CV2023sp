@@ -6,7 +6,6 @@
 
 float get_pixel(image im, int c, int h, int w)
 {
-    assert(c >=0 && c <= 2);
     if (h < 0)
         h = 0;
     if (h >= im.h)
@@ -21,7 +20,7 @@ float get_pixel(image im, int c, int h, int w)
 
 void set_pixel(image im, int c, int h, int w, float v)
 {
-    if (c < 0 || c > 2)
+    if (c < 0 || c >= im.c)
         return;
     if (h < 0 || w < 0)
         return;
