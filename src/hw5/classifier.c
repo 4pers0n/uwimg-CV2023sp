@@ -15,18 +15,26 @@ void activate_matrix(matrix m, ACTIVATION a)
         for(j = 0; j < m.cols; ++j){
             double x = m.data[i][j];
             if(a == LOGISTIC){
-                // TODO
+                m.data[i][j] = 1 / (1 + exp(-x));
             } else if (a == RELU){
-                // TODO
+                if (x > 0)
+                    m.data[i][j] = x;
+                else
+                    m.data[i][j] = 0;
             } else if (a == LRELU){
-                // TODO
+                if (x > 0)
+                    m.data[i][j] = x;
+                else
+                    m.data[i][j] = 0.1 * x;
             } else if (a == SOFTMAX){
-                // TODO
+                m.data[i][j] = exp(x);
             }
             sum += m.data[i][j];
         }
         if (a == SOFTMAX) {
-            // TODO: have to normalize by sum if we are using SOFTMAX
+            for (int j = 0; j < m.cols; ++j) {
+                m.data[i][j] /= sum;
+            }
         }
     }
 }
@@ -42,7 +50,21 @@ void gradient_matrix(matrix m, ACTIVATION a, matrix d)
     for(i = 0; i < m.rows; ++i){
         for(j = 0; j < m.cols; ++j){
             double x = m.data[i][j];
-            // TODO: multiply the correct element of d by the gradient
+            if(a == LOGISTIC){
+                d.data[i][j] = x * (1 - x) * d.data[i][j];
+            } else if (a == RELU){
+                if (x > 0)
+                    d.data[i][j] = d.data[i][j];
+                else
+                    d.data[i][j] = 0;
+            } else if (a == LRELU){
+                if (x > 0)
+                    d.data[i][j] = d.data[i][j];
+                else
+                    d.data[i][j] = 0.1 * d.data[i][j];
+            } else if (a == SOFTMAX){
+                d.data[i][j] = d.data[i][j];
+            }
         }
     }
 }
@@ -58,8 +80,8 @@ matrix forward_layer(layer *l, matrix in)
 
 
     // TODO: fix this! multiply input by weights and apply activation function.
-    matrix out = make_matrix(in.rows, l->w.cols);
-
+    matrix out = matrix_mult_matrix(in, l->w);
+    activate_matrix(out, l->activation);
 
     free_matrix(l->out);// free the old output
     l->out = out;       // Save the current output for gradient calculation
@@ -75,18 +97,19 @@ matrix backward_layer(layer *l, matrix delta)
     // 1.4.1
     // delta is dL/dy
     // TODO: modify it in place to be dL/d(xw)
+    gradient_matrix(l->out, l->activation, delta);
 
 
     // 1.4.2
     // TODO: then calculate dL/dw and save it in l->dw
     free_matrix(l->dw);
-    matrix dw = make_matrix(l->w.rows, l->w.cols); // replace this
+    matrix dw = matrix_mult_matrix(transpose_matrix(l->in), delta);
     l->dw = dw;
 
     
     // 1.4.3
     // TODO: finally, calculate dL/dx and return it.
-    matrix dx = make_matrix(l->in.rows, l->in.cols); // replace this
+    matrix dx = matrix_mult_matrix(delta, transpose_matrix(l->w));
 
     return dx;
 }
@@ -101,13 +124,20 @@ void update_layer(layer *l, double rate, double momentum, double decay)
     // TODO:
     // Calculate Δw_t = dL/dw_t - λw_t + mΔw_{t-1}
     // save it to l->v
+    matrix m1 = axpy_matrix(-decay, l->w, l->dw);
+    matrix wt = axpy_matrix(momentum, l->v, m1);
+    free_matrix(l->v);
+    l->v = wt;
 
 
     // Update l->w
+    matrix w = axpy_matrix(rate, wt, l->w);
+    free_matrix(l->w);
+    l->w = w;
 
 
     // Remember to free any intermediate results to avoid memory leaks
-
+    free_matrix(m1);
 }
 
 // Make a new layer for our model
@@ -245,28 +275,33 @@ void train_model(model m, data d, int batch, int iters, double rate, double mome
 // Questions 
 //
 // 5.2.2.1 Why might we be interested in both training accuracy and testing accuracy? What do these two numbers tell us about our current model?
-// TODO
+// Because we could overfit our model and get a very high training accuracy but it could perform really bad on real life data.
+// High training accuracy tells us the bias is low and high testing accuracy tells us the variant is low.
 //
 // 5.2.2.2 Try varying the model parameter for learning rate to different powers of 10 (i.e. 10^1, 10^0, 10^-1, 10^-2, 10^-3) and training the model. What patterns do you see and how does the choice of learning rate affect both the loss during training and the final model accuracy?
-// TODO
+// 10^1 will lead to overshooting. Thus many losses during training are not valid and the accuracy is very low. 10^0 has similar issue of overshooting thus training losses often times just shoot up rather than decrease.
+// 10^-1 and 10^-2 perform pretty well. Losses steadily decrease and both achieved an accuracy above 90. 10^-3 is too slow. Thus with 1000 iterations even the loss decreases gradually but still ended up pretty high. So the accuracy is not as good.
+// The pattern is generally with learning rate decreasing the losses decrease more slowly.
 //
 // 5.2.2.3 Try varying the parameter for weight decay to different powers of 10: (10^0, 10^-1, 10^-2, 10^-3, 10^-4, 10^-5). How does weight decay affect the final model training and test accuracy?
-// TODO
+// High weight decay usually leads to high bias thus high training error. But since we regularize weights to prevent overfitting, test accuracy is noticeably higher than training accuracy.
+// Low weight decay usually has higher training accuracy. But the model doesn't seem to overfit badly even without regularization. So the test accuracy is still pretty high.
 //
 // 5.2.3.1 Currently the model uses a logistic activation for the first layer. Try using a the different activation functions we programmed. How well do they perform? What's best?
-// TODO
+// Logistic was able to achieve an accuracy of 89% for both training and test data. RELU was 92% for both. LRELU was also around 92%. SOFTMAX was around 60%. RELU and LRELU are both pretty good.
 //
 // 5.2.3.2 Using the same activation, find the best (power of 10) learning rate for your model. What is the training accuracy and testing accuracy?
-// TODO
+// 10^-1 gives the best. Training accuracy is 95% and test accuracy is 94%.
 //
 // 5.2.3.3 Right now the regularization parameter `decay` is set to 0. Try adding some decay to your model. What happens, does it help? Why or why not may this be?
-// TODO
+// I set the decay to 0.1 and it helped a little bit with the test accuracy. The test accuracy increased from 94% to 94.5%. It may be that adding the regularization helped to prevent the model from overfitting a little bit.
 //
 // 5.2.3.4 Modify your model so it has 3 layers instead of two. The layers should be `inputs -> 64`, `64 -> 32`, and `32 -> outputs`. Also modify your model to train for 3000 iterations instead of 1000. Look at the training and testing error for different values of decay (powers of 10, 10^-4 -> 10^0). Which is best? Why?
-// TODO
+// The best I was able to achieve is 10^-4 for the decay. The training accuracy is 98% and test accuracy is 96.7%. Using larger decay will give similar test accuracy but slightly worse training accuracy due to the increasing biases.
+// The model doesn't seem to be complex enough to cause any siginificant overfitting.
 //
 // 5.3.2.1 How well does your network perform on the CIFAR dataset?
-// TODO
+// Training accuracy: 18%. Test accuracy: 18%.
 //
 
 
